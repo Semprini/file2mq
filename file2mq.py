@@ -58,7 +58,7 @@ class F2q():
         connection.close()    
         
         
-def messanger_thread():
+def messenger_thread():
     done = False
     f2q = F2q()
     
@@ -126,7 +126,7 @@ if __name__ == "__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
     
     q = Queue()
-    t = Thread(target=messanger_thread)
+    t = Thread(target=messenger_thread)
     t.start()
 
     path = settings.BASE_PATH
