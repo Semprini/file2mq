@@ -11,28 +11,30 @@ import pika
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-class settings():
-    MQ_FRAMEWORK = {   'USER':'foo',
-                    'PASSWORD':'foo',
-                    'HOST':'127.0.0.1'
-    }
-    BASE_PATH = './out/'
-    ARCHIVE_PATH = './archive/'
+try:
+    import settings
+except ImportError:
+    class settings():
+        MQ_FRAMEWORK = {   'USER':'foo',
+                        'PASSWORD':'foo',
+                        'HOST':'127.0.0.1'
+        }
+        BASE_PATH = './out/'
+        ARCHIVE_PATH = './archive/'
 
     
 class F2q():
-    def __init__():
-        pass
 
-    def get_headers(header_templates, body):
+    def get_headers(self, header_templates, body):
         headers_dict = {}
         #for header in exchange_header_list:
         #    headers_dict[header] = '%s'%getattr(instance,header)
         return headers_dict
 
         
-    def get_exchange_config(path):
-        config = { 'exchange_name':'test',
+    def get_exchange_config(self, path):
+        name = os.path.basename(path).split('.')[0]
+        config = { 'exchange_name':name,
                     'header_templates':[]
         }
         return config
