@@ -1,3 +1,4 @@
+BASE_QUEUE = 'my_legacy_system_name'
 MQ_FRAMEWORK = {   'USER':'super',
                 'PASSWORD':'super',
                 'HOST':'127.0.0.1'

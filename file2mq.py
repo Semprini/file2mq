@@ -19,7 +19,7 @@ except ImportError:
                         'PASSWORD':'foo',
                         'HOST':'127.0.0.1'
         }
-        BASE_QUEUE = 'my_legacy_system_name'
+        BASE_QUEUE = 'my_legacy_system_name_'
         BASE_PATH = './out/'
         ARCHIVE_PATH = './archive/'
 
@@ -48,7 +48,7 @@ class MQHandler():
             with open(filepath + "settings.json") as f:
                 config = json.load(f)
         except FileNotFoundError as e:
-            exchange_name = os.path.split(path.replace(settings.BASE_PATH,''))[0]
+            exchange_name = settings.BASE_QUEUE + os.path.split(path.replace(settings.BASE_PATH,''))[0]
             config = { 'exchange_name':exchange_name,
                         'header_templates':[]
             }
