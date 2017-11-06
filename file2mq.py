@@ -19,12 +19,22 @@ except ImportError:
                         'PASSWORD':'foo',
                         'HOST':'127.0.0.1'
         }
+        BASE_QUEUE = 'my_legacy_system_name'
         BASE_PATH = './out/'
         ARCHIVE_PATH = './archive/'
 
     
-class F2q():
-
+class MQHandler():
+    def __init__(self):
+        self.connect()
+        
+        
+    def connect(self):
+        self.credentials = pika.PlainCredentials(settings.MQ_FRAMEWORK['USER'], settings.MQ_FRAMEWORK['PASSWORD'])
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=settings.MQ_FRAMEWORK['HOST'],credentials=self.credentials))
+        self.channel = self.connection.channel()
+        
+        
     def get_headers(self, header_templates, body):
         headers_dict = {}
         #for header in exchange_header_list:
@@ -33,10 +43,15 @@ class F2q():
 
         
     def get_exchange_config(self, path):
-        name = os.path.basename(path).split('.')[0]
-        config = { 'exchange_name':name,
-                    'header_templates':[]
-        }
+        filepath, filename = os.path.split(path)
+        try:
+            with open(filepath + "settings.json") as f:
+                config = json.load(f)
+        except FileNotFoundError as e:
+            exchange_name = os.path.split(path.replace(settings.BASE_PATH,''))[0]
+            config = { 'exchange_name':exchange_name,
+                        'header_templates':[]
+            }
         return config
         
         
@@ -46,23 +61,26 @@ class F2q():
         """
         config = self.get_exchange_config(path)
         headers_dict = self.get_headers(config['header_templates'], body)
+        sent = False
         
-        credentials = pika.PlainCredentials(settings.MQ_FRAMEWORK['USER'], settings.MQ_FRAMEWORK['PASSWORD'])
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host=settings.MQ_FRAMEWORK['HOST'],credentials=credentials))
-        channel = connection.channel()
-        channel.exchange_declare(exchange=config['exchange_name'], exchange_type='headers')
-
-        channel.basic_publish(  exchange=exchange_name,
-                                routing_key='',
-                                body=body,
-                                properties = pika.BasicProperties(headers=headers_dict))
-
-        connection.close()    
+        while not sent:
+            try:
+                self.channel.exchange_declare(exchange=config['exchange_name'], exchange_type='headers')
+                self.channel.basic_publish(  exchange=config['exchange_name'],
+                                    routing_key='',
+                                    body=body,
+                                    properties = pika.BasicProperties(headers=headers_dict))
+                sent = True
+            except Exception as err:
+                logging.critical( "Unable to send message to exchange: %s | %s"%(err,config['exchange_name']) )
+                traceback.print_exc()
+                time.sleep(5)
+                self.connect()
         
         
 def messenger_thread():
     done = False
-    f2q = F2q()
+    mq_handler = MQHandler()
     
     while not done:
         item = q.get()
@@ -74,14 +92,16 @@ def messenger_thread():
                 stat = os.stat(item)
                 with open(item) as f:
                     data = f.read()
-                f2q.send(item, data)
+                mq_handler.send(item, data)
                 
                 dest = settings.ARCHIVE_PATH + item.replace(settings.BASE_PATH,'')
+                directory = os.path.split(dest)[0]
+                if not os.path.exists(directory):
+                    os.makedirs(directory)
                 os.rename(item, dest)
-                logging.info("Moved %s: to %s", item, dest )
+                logging.info("Sent message %s. Archived to %s", item, dest )
             except FileNotFoundError as e:
                 pass
-        logging.info("TASK DONE! {}".format(item))
         q.task_done()
     logging.info("Task thread exit")
 
@@ -93,27 +113,27 @@ class F2QEventHandler(FileSystemEventHandler):
         super(F2QEventHandler, self).on_moved(event)
 
         what = 'directory' if event.is_directory else 'file'
-        logging.info("Moved %s: from %s to %s", what, event.src_path,
-                     event.dest_path)
+        #logging.info("Moved %s: from %s to %s", what, event.src_path,
+        #             event.dest_path)
 
     def on_created(self, event):
         super(F2QEventHandler, self).on_created(event)
 
         what = 'directory' if event.is_directory else 'file'
-        logging.info("Created %s: %s", what, event.src_path)
+        #logging.info("Created %s: %s", what, event.src_path)
 
     def on_deleted(self, event):
         super(F2QEventHandler, self).on_deleted(event)
 
         what = 'directory' if event.is_directory else 'file'
-        logging.info("Deleted %s: %s", what, event.src_path)
+        #logging.info("Deleted %s: %s", what, event.src_path)
 
     def on_modified(self, event):
         super(F2QEventHandler, self).on_modified(event)
 
         try:
             what = 'directory' if event.is_directory else 'file'
-            if not event.is_directory:
+            if not event.is_directory and os.path.basename(event.src_path) != 'settings.json':
                 stat = os.stat(event.src_path)
                 if stat.st_size > 0:
                     q.put(event.src_path)
@@ -127,14 +147,16 @@ if __name__ == "__main__":
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     
+    if not os.path.exists(settings.BASE_PATH):
+        os.makedirs(settings.BASE_PATH)
+        
     q = Queue()
     t = Thread(target=messenger_thread)
     t.start()
 
-    path = settings.BASE_PATH
     event_handler = F2QEventHandler()
     observer = Observer()
-    observer.schedule(event_handler, path, recursive=True)
+    observer.schedule(event_handler, settings.BASE_PATH, recursive=True)
     observer.start()
     try:
         while True:
