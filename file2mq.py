@@ -19,7 +19,7 @@ except ImportError:
                         'PASSWORD':'foo',
                         'HOST':'127.0.0.1'
         }
-        BASE_QUEUE = 'my_legacy_system_name_'
+        BASE_QUEUE = 'my_legacy_system_name.from.'
         BASE_PATH = './out/'
         ARCHIVE_PATH = './archive/'
 
