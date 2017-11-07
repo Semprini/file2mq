@@ -143,17 +143,21 @@ class F2QEventHandler(FileSystemEventHandler):
     
         
 if __name__ == "__main__":
+    num_worker_threads = 3
+    
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     
     if not os.path.exists(settings.BASE_PATH):
         os.makedirs(settings.BASE_PATH)
-        
-    q = Queue()
-    t = Thread(target=messenger_thread)
-    t.start()
 
+    q = Queue()
+    for i in range(num_worker_threads):
+         t = Thread(target=messenger_thread)
+         #t.daemon = True
+         t.start()
+     
     event_handler = F2QEventHandler()
     observer = Observer()
     observer.schedule(event_handler, settings.BASE_PATH, recursive=True)
@@ -162,6 +166,7 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        q.put("DONE")
+        for i in range(num_worker_threads):
+            q.put("DONE")
         observer.stop()
     observer.join()
